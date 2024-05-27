@@ -1,0 +1,134 @@
+pipeline
+{
+    agent any
+    stages
+    {
+        stage('Download')
+        {
+            steps
+            {
+                git 'https://github.com/intelliqittrainings/maven.git'
+            }
+        }
+        stage('Build')
+        {
+            steps
+            {
+                sh 'mvn package'
+            }
+        }
+        stage('Create_Docker_Image')
+        {
+            steps
+            {
+                
+            }
+        }
+        stage('Push_Docker_image')
+        {
+            steps
+            {
+                
+            }
+        }
+        stage('Execute Ansible playbook to deploy docker app in the QAserrvers')
+        {
+            steps
+            {
+                sh 'ssh ubuntu@172.31.20.134 ansible-playbook playbook2.yml -b'
+            }
+        }
+        stage('Downlaod and execute the selenium scripts')
+        {
+            steps
+            {
+                git 'https://github.com/intelliqittrainings/FunctionalTesting.git'
+                sh 'java -jar testing.jar'
+            }
+        }
+        stage('Execute Kubernetes definition files to deploy into proservers')
+        {
+            steps
+            {
+                sh '''ssh ubuntu@44.198.166.244 kubectl apply -f myapp-deployment.yml
+ssh ubuntu@44.198.166.244 kubectl apply -f myapp-service.yml'''
+            }
+        }
+    }
+}
+
+==================================================================
+vim myapp-deployment.yml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+ name: myapp-deployment
+ labels:
+  author: intelliqit
+  type: appserver
+spec:
+ replicas: 2
+ selector:
+  matchLabels:
+   type: appserver
+ template:
+  metadata:
+   name: myapp-pod
+   labels:
+    type: appserver
+  spec:
+   containers:
+    - name: myapp
+      image: intelliqit/myapp
+...
+
+
+vim myapp-service.yml
+---
+apiVersion: apps/v1
+kind: Service
+metadata:
+ name: myapp-service
+ labels:
+  author: intelliqit
+spec:
+ type: NodePort
+ ports:
+  - targetPort: 8080
+    port: 8080
+    nodePort: 30008
+ selector:
+  type: appserver
+...
+
+=========================================================
+---
+- name: Setup of docker and pip for ansible-docker integrations
+  hosts: all
+  tasks:
+   - name: Install pip
+     apt:
+      name: python3-pip
+      state: present
+      update_cache: yes
+   - name: Download and install docker and also docker-py
+     shell: "{{item}}"
+     with_items:
+      - curl -fsSL https://get.docker.com -o get-docker.sh
+      - sh get-docker.sh
+      - pip3 install docker-py
+~
+
+============================================
+---
+- name: Create container from the customised docker image
+  hosts: all
+  tasks:
+   - name: Create container
+     docker_container:
+      name: myapp
+      image: intelliqit/myapp
+      ports:
+       - 9090:8080
+...
